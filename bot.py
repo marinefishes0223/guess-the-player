@@ -8,6 +8,8 @@ Access control:
   (user id 1224350217336524801). Anyone else gets a polite refusal.
 
 PREFIX Commands (unchanged mechanics):
+  !plshelp                           shows the help embed (same as /help) — works
+                                      even if slash commands haven't synced yet
   !newguess "Player Full Name"      (attach the player photo to the same message;
                                       optionally attach a 2nd image to use as a
                                       custom stadium background)
@@ -16,6 +18,11 @@ PREFIX Commands (unchanged mechanics):
   !endguess                          alias for !reveal
 
 SLASH Commands:
+  /help
+      Shows an embed explaining what the bot does and listing every command.
+      Available to everyone (not mod-restricted) so regular players can also
+      look it up.
+
   /picture_send picture:<attachment>
       Sends whatever image you attach straight back to the channel. Intended
       use: you already have a generated silhouette/quiz-card image and just
@@ -176,8 +183,16 @@ def build_letter_count_hint(answer: str) -> str:
 async def on_ready():
     print(f"Logged in as {bot.user} (id={bot.user.id})")
     try:
-        synced = await bot.tree.sync()
-        print(f"Synced {len(synced)} slash command(s).")
+        dev_guild_id = getattr(config, "DEV_GUILD_ID", None)
+        if dev_guild_id:
+            # Guild-scoped commands show up instantly — use this while developing.
+            guild_obj = discord.Object(id=dev_guild_id)
+            bot.tree.copy_global_to(guild=guild_obj)
+            synced = await bot.tree.sync(guild=guild_obj)
+            print(f"Synced {len(synced)} slash command(s) to dev guild {dev_guild_id} (instant).")
+        else:
+            synced = await bot.tree.sync()
+            print(f"Synced {len(synced)} global slash command(s) (can take up to ~1 hour to appear).")
     except Exception as e:
         print(f"Slash command sync failed: {e}")
 
@@ -185,6 +200,46 @@ async def on_ready():
 # ---------------------------------------------------------------------------
 # Existing prefix commands (mechanics unchanged, now mod/owner-only)
 # ---------------------------------------------------------------------------
+
+@bot.command(name="plshelp")
+async def plshelp(ctx: commands.Context):
+    """Prefix version of /help, in case slash commands haven't synced yet."""
+    embed = discord.Embed(
+        title="🏏 Guess the Cricketer — Help",
+        description=(
+            "The bot posts a cricketer's silhouette photo and everyone guesses who it is "
+            "right in the chat. Mods/owner run the commands below; everyone else just types guesses."
+        ),
+        color=discord.Color.green(),
+    )
+    embed.add_field(
+        name="🎮 Old-style round (first correct guess wins)",
+        value=(
+            "`!newguess \"Player Name\"` — start a round (attach player photo, optional background)\n"
+            "`!hint` — letter-count hint for the active round\n"
+            "`!reveal` / `!endguess` — end the round early and reveal the answer"
+        ),
+        inline=False,
+    )
+    embed.add_field(
+        name="🎯 New-style round (set number of guesses each)",
+        value=(
+            "`/start_quiz` — start a round, choose guesses per participant (default 5)\n"
+            "`/picture_send` — post an attached image to the channel\n"
+            "`/hint` — mod types a custom hint, refreshes everyone's guesses\n"
+            "`/timer` — countdown then auto-end the round and reveal the answer"
+        ),
+        inline=False,
+    )
+    embed.add_field(
+        name="🔒 Who can use these?",
+        value="Server mods (Administrator / Manage Server) and the bot owner only.",
+        inline=False,
+    )
+    embed.set_footer(text="Just type your guess as a normal chat message — no command needed to play!")
+
+    await ctx.reply(embed=embed)
+
 
 @bot.command(name="newguess")
 @mod_or_owner_check()
@@ -379,6 +434,45 @@ async def timer(interaction: discord.Interaction, wait_seconds: app_commands.Ran
         await interaction.channel.send(f"⏰ **Time's up!** The answer was **{answer}**. Round ended.")
     else:
         await interaction.channel.send("That round already ended before the timer went off.")
+
+
+@bot.tree.command(name="help", description="Show what this bot does and list all its commands.")
+async def help_slash(interaction: discord.Interaction):
+    embed = discord.Embed(
+        title="🏏 Guess the Cricketer — Help",
+        description=(
+            "The bot posts a cricketer's silhouette photo and everyone guesses who it is "
+            "right in the chat. Mods/owner run the commands below; everyone else just types guesses."
+        ),
+        color=discord.Color.green(),
+    )
+    embed.add_field(
+        name="🎮 Old-style round (first correct guess wins)",
+        value=(
+            "`!newguess \"Player Name\"` — start a round (attach player photo, optional background)\n"
+            "`!hint` — letter-count hint for the active round\n"
+            "`!reveal` / `!endguess` — end the round early and reveal the answer"
+        ),
+        inline=False,
+    )
+    embed.add_field(
+        name="🎯 New-style round (set number of guesses each)",
+        value=(
+            "`/start_quiz` — start a round, choose guesses per participant (default 5)\n"
+            "`/picture_send` — post an attached image to the channel\n"
+            "`/hint` — mod types a custom hint, refreshes everyone's guesses\n"
+            "`/timer` — countdown then auto-end the round and reveal the answer"
+        ),
+        inline=False,
+    )
+    embed.add_field(
+        name="🔒 Who can use these?",
+        value="Server mods (Administrator / Manage Server) and the bot owner only.",
+        inline=False,
+    )
+    embed.set_footer(text="Just type your guess as a normal chat message — no command needed to play!")
+
+    await interaction.response.send_message(embed=embed)
 
 
 @bot.tree.command(name="hint", description="Ask a mod/owner for a hint and refresh everyone's guesses.")
