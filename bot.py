@@ -1120,3 +1120,4 @@ def _acquire_single_instance_lock() -> socket.socket:
 if __name__ == "__main__":
     _instance_lock = _acquire_single_instance_lock()  # keep a reference so it stays held
     bot.run(config.DISCORD_BOT_TOKEN)
+# Updated on 2026-10-14
